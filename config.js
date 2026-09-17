@@ -92,5 +92,23 @@ window.CENTRE = {
       courriel:  "Jeremy@goplex.ca",
       telephone: "(514) 388-7779 ext #107",
     },
+    {
+      nom:       "Felix L",
+      poste:     "Comptable",
+      courriel:  "comptabilite@goplex.ca",
+      telephone: "(514) 388-7779",
+    },
+    {
+      nom:       "Fatima Z",
+      poste:     "Cheffe - Chicane Resto-bar",
+      courriel:  "Fatima@goplex.ca",
+      telephone: "(514) 388-7779",
+    },
+    {
+      nom:       "Chloe L",
+      poste:     "Front of house - Chicane Resto-bar",
+      courriel:  "chloe@goplex.ca",
+      telephone: "(514) 388-7779",
+    },
   ],
 };
