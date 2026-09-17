@@ -99,7 +99,7 @@ window.CENTRE = {
       telephone: "(514) 388-7779",
     },
     {
-      nom:       "Fatima Z",
+      nom:       "Fatima S",
       poste:     "Cheffe - Chicane Resto-bar",
       courriel:  "Fatima@goplex.ca",
       telephone: "(514) 388-7779",
