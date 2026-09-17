@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<title>GoPlex — Impression des coordonnées</title>
+<script src="qz-tray.js"></script>
+<script src="jsrsasign-all-min.js"></script>
+<script src="logo.js"></script>
+<script src="qr.js"></script>
+<script src="signing.js"></script>
+<script src="config.js"></script>
+<style>
+  /* ---------- Palette de marque GoPlex ---------- */
+  :root{
+    --paper:#FAF8F3;      /* fond chaud clair */
+    --card:#FFFFFF;
+    --ink:#17140E;        /* noir chaud */
+    --muted:#8C857A;
+    --line:#ECE6D9;       /* filet hairline chaud */
+    --or:#D5A62E;         /* or principal */
+    --or-2:#E8CE6B;       /* or clair */
+    --noir:#1B1917;
+    --ok:#3E7D4F; --err:#B23B3B;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:var(--paper); color:var(--ink);
+    font-family:"Helvetica Neue",Arial,sans-serif;
+    font-size:15px; line-height:1.5;
+  }
+  .eyebrow{
+    font:600 11px/1 "Arial Narrow",Arial,sans-serif;
+    letter-spacing:.22em; text-transform:uppercase; color:var(--muted);
+  }
+
+  /* ---------- Entête ---------- */
+  header{
+    display:flex; align-items:center; gap:18px; flex-wrap:wrap;
+    padding:20px 28px; background:var(--card);
+    border-bottom:1px solid var(--line);
+  }
+  header img.logo{height:44px; width:auto; display:block}
+  header .titre{border-left:1px solid var(--line); padding-left:18px}
+  header .titre h1{margin:0; font-size:16px; letter-spacing:.01em}
+  header .titre .eyebrow{margin-bottom:4px}
+  #statut{
+    margin-left:auto; font:600 12px/1 "Arial Narrow",Arial,sans-serif;
+    letter-spacing:.06em; padding:8px 14px; border-radius:999px;
+    background:#F1ECE1; color:var(--muted); border:1px solid var(--line);
+    white-space:nowrap;
+  }
+  #statut.ok{background:rgba(62,125,79,.10); color:var(--ok); border-color:rgba(62,125,79,.25)}
+  #statut.err{background:rgba(178,59,59,.08); color:var(--err); border-color:rgba(178,59,59,.25)}
+
+  /* filet or façon ligne de course */
+  .stripe{height:3px; background:linear-gradient(90deg,var(--or) 0%,var(--or-2) 50%,var(--or) 100%)}
+
+  /* ---------- Barre de contrôle ---------- */
+  .barre{
+    display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+    padding:16px 28px; background:var(--card); border-bottom:1px solid var(--line);
+  }
+  .barre label{font:600 11px/1 "Arial Narrow",Arial,sans-serif;
+    letter-spacing:.12em; text-transform:uppercase; color:var(--muted)}
+  select{
+    font-size:14px; color:var(--ink); background:var(--card);
+    border:1px solid var(--line); border-radius:8px; padding:9px 12px; cursor:pointer;
+  }
+  select:focus-visible{outline:2px solid var(--or); outline-offset:1px}
+  button{font-family:inherit; cursor:pointer; border-radius:8px}
+  .btn{
+    border:1px solid var(--line); background:var(--card); color:var(--ink);
+    padding:9px 16px; font-size:14px;
+  }
+  .btn:hover{border-color:var(--or)}
+  .btn-or{
+    background:var(--noir); color:#fff; border:1px solid var(--noir);
+    padding:10px 18px; font-size:14px; font-weight:600;
+  }
+  .btn-or:hover{background:#000}
+  .btn-or:disabled{background:#D9D3C7; border-color:#D9D3C7; color:#fff; cursor:not-allowed}
+  button:focus-visible{outline:2px solid var(--or); outline-offset:2px}
+
+  /* ---------- Disposition principale ---------- */
+  main{max-width:860px; margin:0 auto; padding:28px}
+  .consigne{margin:0 0 24px; color:var(--muted); font-size:14px}
+  .groupe{margin-bottom:30px}
+  .eyebrow{display:block}
+  .groupe .eyebrow{margin-bottom:12px}
+  .liste{display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:12px}
+  .choix{
+    text-align:left; border:1px solid var(--line); background:var(--card);
+    padding:16px 18px; display:flex; flex-direction:column; gap:4px;
+    position:relative; transition:border-color .12s, box-shadow .12s, transform .06s;
+  }
+  .choix::after{content:"⎙"; position:absolute; top:14px; right:16px;
+    font-size:16px; color:var(--line)}
+  .choix:hover{border-color:var(--or); box-shadow:0 2px 10px rgba(213,166,46,.18)}
+  .choix:hover::after{color:var(--or)}
+  .choix:active{transform:translateY(1px)}
+  .choix.occupe{border-color:var(--or); box-shadow:inset 3px 0 0 var(--or)}
+  .choix.occupe::after{content:"…"}
+  .choix b{font-size:15px; padding-right:22px}
+  .choix span{font-size:12px; color:var(--muted)}
+
+  /* ---------- Toast de confirmation ---------- */
+  #toast{
+    position:fixed; left:50%; bottom:26px; transform:translate(-50%,20px);
+    background:var(--noir); color:#fff; padding:12px 22px; border-radius:999px;
+    font-size:14px; font-weight:600; letter-spacing:.01em; opacity:0;
+    pointer-events:none; transition:opacity .18s, transform .18s;
+    box-shadow:0 8px 24px rgba(23,20,14,.25); max-width:88vw; text-align:center;
+  }
+  #toast.show{opacity:1; transform:translate(-50%,0)}
+  #toast.err{background:var(--err)}
+  #toast .pastille{color:var(--or-2)}
+
+  /* ---------- STYLE DU REÇU (partagé écran + impression) ---------- */
+  .ticket{font-family:Arial,Helvetica,sans-serif; color:#000; width:100%}
+  .ticket .tlogo{display:block; width:70%; margin:0 auto 3mm}
+  .ticket .tsep{border:0; border-top:1.5px solid #000; margin:3mm 0}
+  .ticket .tsep.fin{border-top-style:double; border-top-width:3px}
+  .ticket .tnom{text-align:center; font-weight:700; font-size:12pt;
+    letter-spacing:.04em; text-transform:uppercase; margin:0 0 1mm}
+  .ticket .tlabel{text-align:center; font-size:7.5pt; letter-spacing:.18em;
+    text-transform:uppercase; color:#000; margin:3mm 0 1.5mm}
+  .ticket .tcenter{text-align:center; margin:.6mm 0; font-size:9.5pt}
+  .ticket .tbig{text-align:center; font-size:11pt; font-weight:700; margin:.6mm 0}
+  .ticket .trow{display:flex; justify-content:space-between; gap:6mm;
+    font-size:9pt; margin:.9mm 0; align-items:baseline}
+  .ticket .trow .r{text-align:right; white-space:nowrap}
+  .ticket .tmerci{text-align:center; font-size:9pt; font-style:italic; margin-top:1mm}
+  .ticket .tposte{text-align:center; font-size:8.5pt; color:#000; margin:.5mm 0 0}
+  .ticket .tqr{display:block; width:44%; margin:2mm auto 1.5mm; image-rendering:pixelated}
+  .ticket .tstars{text-align:center; font-size:12pt; letter-spacing:.12em; margin:.5mm 0}
+  /* Téléphone / courriel mis en évidence (plus gros) */
+  .ticket .tcontact{font-size:12pt; font-weight:700; margin:1.4mm 0}
+  .ticket .trow.tgrand{font-size:11pt; font-weight:700; margin:1.4mm 0}
+
+  /* noeud caché de mesure (hauteur d'impression exacte) */
+  #mesure{position:absolute; visibility:hidden; left:-9999px; top:0}
+</style>
+</head>
+<body>
+<header>
+  <img class="logo" id="logoEntete" alt="GoPlex e-karting+">
+  <div class="titre">
+    <div class="eyebrow">Point de vente</div>
+    <h1>Impression des coordonnées</h1>
+  </div>
+  <div id="statut">QZ Tray — hors ligne</div>
+</header>
+<div class="stripe"></div>
+
+<div class="barre">
+  <button class="btn-or" id="btnConnecter">Connecter QZ Tray</button>
+  <label>Imprimante</label>
+  <select id="imprimante"><option value="">Défaut du système</option></select>
+  <button class="btn" id="btnRafraichir">↻ Détecter</button>
+  <label style="margin-left:8px">Papier</label>
+  <select id="largeur">
+    <option value="48">80 mm</option>
+    <option value="32">58 mm</option>
+  </select>
+</div>
+
+<main>
+  <p class="consigne" id="consigne">Clique un reçu pour l'imprimer directement.</p>
+  <div class="groupe">
+    <div class="eyebrow">Coordonnées générales</div>
+    <div class="liste" id="listeGeneraux"></div>
+  </div>
+  <div class="groupe">
+    <div class="eyebrow">Coordonnées Chicane Resto Bar</div>
+    <div class="liste" id="listeChicane"></div>
+  </div>
+  <div class="groupe">
+    <div class="eyebrow">Coordonnées de la gestion</div>
+    <div class="liste" id="listeEmployes"></div>
+  </div>
+</main>
+
+<div id="mesure"></div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* ============================================================
+   Données
+   ============================================================ */
+const C = window.CENTRE;
+const LOGO = window.LOGO || {};
+document.getElementById('logoEntete').src = LOGO.couleur || '';
+
+const largeurMM = () => document.getElementById('largeur').value === '32' ? 48 : 72;
+
+const esc = s => String(s==null?'':s)
+  .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+/* ============================================================
+   Contenu des reçus (HTML)
+   ============================================================ */
+function ligneLR(g,d){ return '<div class="trow"><span>'+esc(g)+'</span><span class="r">'+esc(d)+'</span></div>'; }
+
+const CONTENUS = {
+  coordonnees(){
+    let h = '';
+    if(C.adresse1) h+='<p class="tcenter">'+esc(C.adresse1)+'</p>';
+    if(C.adresse2) h+='<p class="tcenter">'+esc(C.adresse2)+'</p>';
+    h+='<hr class="tsep">';
+    if(C.telephone) h+='<p class="tcenter tcontact">Tél. '+esc(C.telephone)+'</p>';
+    if(C.courriel)  h+='<p class="tcenter tcontact">'+esc(C.courriel)+'</p>';
+    if(C.siteWeb)   h+='<p class="tcenter">'+esc(C.siteWeb)+'</p>';
+    return h;
+  },
+  coordonneesHeures(){
+    let h = '';
+    if(C.adresse1) h+='<p class="tcenter">'+esc(C.adresse1)+'</p>';
+    if(C.adresse2) h+='<p class="tcenter">'+esc(C.adresse2)+'</p>';
+    if(C.telephone) h+='<p class="tcenter tcontact">Tél. '+esc(C.telephone)+'</p>';
+    h+='<p class="tlabel">Heures d\'ouverture</p><hr class="tsep">';
+    for(const [j,hr] of (C.heures||[])) h+=ligneLR(j,hr);
+    return h;
+  },
+
+  avisGoogle(){
+    const QR = window.QR || {};
+    let h = '<p class="tlabel">Votre avis compte</p>';
+    h+='<p class="tstars">★★★★★</p>';
+    if(QR.avisGoogle) h+='<img class="tqr" src="'+QR.avisGoogle+'">';
+    h+='<p class="tcenter">Scannez pour nous laisser<br>un avis Google</p>';
+    h+='<p class="tcenter" style="font-size:8pt">Merci de votre appui !</p>';
+    return h;
+  },
+  coordonneesCh(){
+    let h = '';
+    if(C.nomCh) h+='<p class="tnom">'+esc(C.nomCh)+'</p>';
+    if(C.adresse1) h+='<p class="tcenter">'+esc(C.adresse1)+'</p>';
+    if(C.adresse2) h+='<p class="tcenter">'+esc(C.adresse2)+'</p>';
+    h+='<hr class="tsep">';
+    if(C.telephoneCh) h+='<p class="tcenter tcontact">Tél. '+esc(C.telephoneCh)+'</p>';
+    if(C.courrielCh)  h+='<p class="tcenter tcontact">'+esc(C.courrielCh)+'</p>';
+    if(C.siteWebCh||C.siteWeb) h+='<p class="tcenter">'+esc(C.siteWebCh||C.siteWeb)+'</p>';
+    return h;
+  },
+  coordonneesHeuresCh(){
+    let h = '';
+    if(C.nomCh) h+='<p class="tnom">'+esc(C.nomCh)+'</p>';
+    if(C.adresse1) h+='<p class="tcenter">'+esc(C.adresse1)+'</p>';
+    if(C.adresse2) h+='<p class="tcenter">'+esc(C.adresse2)+'</p>';
+    if(C.telephoneCh) h+='<p class="tcenter tcontact">Tél. '+esc(C.telephoneCh)+'</p>';
+    h+='<p class="tlabel">Heures d\'ouverture</p><hr class="tsep">';
+    for(const [j,hr] of (C.heuresCh||C.heures||[])) h+=ligneLR(j,hr);
+    return h;
+  },
+  employe(i){
+    const e=(C.employes||[])[i]; if(!e) return '';
+    let h = '<p class="tbig">'+esc(e.nom)+'</p>';
+    if(e.poste)     h+='<p class="tposte">'+esc(e.poste)+'</p>';
+    h+='<hr class="tsep">';
+    if(e.telephone) h+='<div class="trow tgrand"><span>Tél.</span><span class="r">'+esc(e.telephone)+'</span></div>';
+    if(e.courriel)  h+='<div class="trow tgrand"><span>Courriel</span><span class="r">'+esc(e.courriel)+'</span></div>';
+    return h;
+  },
+};
+
+/* Enveloppe : logo + contenu + pied de page */
+function ticketHTML(cle, i){
+  const contenu = cle==='employe' ? CONTENUS.employe(i) : CONTENUS[cle]();
+  let h = '';
+  if(LOGO.impression) h+='<img class="tlogo" src="'+LOGO.impression+'">';
+  h+='<hr class="tsep">'+contenu;
+  if(C.piedDePage) h+='<hr class="tsep fin"><p class="tmerci">'+esc(C.piedDePage)+'</p>';
+  return h;
+}
+
+/* ============================================================
+   Construction des boutons (clic = impression directe)
+   ============================================================ */
+const GENERAUX = [
+  ['coordonnees','Coordonnées générales','Adresse, tél., courriel, site'],
+  ['coordonneesHeures','Coordonnées + heures','Coordonnées et horaire'],
+  ['avisGoogle','Avis Google','QR code pour laisser un avis'],
+];
+const CHICANE = [
+  ['coordonneesCh','Coordonnées Chicane Resto Bar','Adresse, tél., courriel, site'],
+  ['coordonneesHeuresCh','Coordonnées + heures','Coordonnées et horaire'],
+];
+
+function bouton(titre, desc){
+  const b=document.createElement('button');
+  b.className='choix'; b.type='button';
+  b.innerHTML='<b>'+esc(titre)+'</b><span>'+esc(desc)+'</span>';
+  return b;
+}
+
+function construire(){
+  const g=document.getElementById('listeGeneraux'); g.innerHTML='';
+  GENERAUX.forEach(([cle,titre,desc])=>{
+    const b=bouton(titre,desc); b.onclick=()=>imprimer(cle,null,b); g.appendChild(b);
+  });
+  const ch=document.getElementById('listeChicane'); ch.innerHTML='';
+  CHICANE.forEach(([cle,titre,desc])=>{
+    const b=bouton(titre,desc); b.onclick=()=>imprimer(cle,null,b); ch.appendChild(b);
+  });
+  const em=document.getElementById('listeEmployes'); em.innerHTML='';
+  (C.employes||[]).forEach((e,i)=>{
+    const b=bouton(e.nom, e.poste||''); b.onclick=()=>imprimer('employe',i,b); em.appendChild(b);
+  });
+}
+
+/* Petit message de confirmation en bas de l'écran */
+let toastTimer;
+function toast(msg, erreur){
+  const t=document.getElementById('toast');
+  t.innerHTML=msg; t.className='show'+(erreur?' err':'');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>t.className='', erreur?4000:2200);
+}
+
+/* ============================================================
+   QZ Tray — connexion, signature, impression
+   ============================================================ */
+function setStatut(t,c){ const el=document.getElementById('statut');
+  el.textContent='QZ Tray — '+t; el.className=c||''; }
+
+let SIGNE=false;
+async function configurerSignature(){
+  let cert=null, cle=null;
+  // 1) Clé embarquée (signing.js) — fonctionne en ouvrant index.html en file://
+  if(window.QZSIGN && window.QZSIGN.certificat){
+    cert=window.QZSIGN.certificat; cle=window.QZSIGN.cleePrivee;
+  }else{
+    // 2) Repli : fichiers dans signing/ (si l'app est servie par un serveur http)
+    try{
+      const rc=await fetch('signing/digital-certificate.txt'); if(rc.ok) cert=await rc.text();
+      const rk=await fetch('signing/private-key.pem');         if(rk.ok) cle=await rk.text();
+    }catch(e){}
+  }
+  if(cert && cle && cert.includes('BEGIN CERTIFICATE')){
+    qz.security.setCertificatePromise(res=>res(cert));
+    qz.security.setSignatureAlgorithm('SHA512');
+    qz.security.setSignaturePromise(toSign=>(res,rej)=>{
+      try{ const s=new KJUR.crypto.Signature({alg:'SHA512withRSA'});
+        s.init(cle); s.updateString(toSign); res(stob64(hextorstr(s.sign()))); }
+      catch(err){ rej(err); }
+    });
+    SIGNE=true;
+  }
+}
+
+async function connecter(){
+  try{
+    if(qz.websocket.isActive()){ setStatut('connecté','ok'); return; }
+    setStatut('connexion…');
+    await configurerSignature();
+    await qz.websocket.connect({retries:1, delay:1});
+    setStatut('connecté'+(SIGNE?' · signé':' · non signé'),'ok');
+    await detecter();
+  }catch(e){
+    setStatut('démarre l\'application QZ','err');
+    alert("Impossible de joindre QZ Tray.\n\nVérifie que l'application QZ Tray est installée "+
+          "et démarrée (icône dans la barre des tâches), puis réessaie.\n\nqz.io/download");
+  }
+}
+
+async function detecter(){
+  const sel=document.getElementById('imprimante');
+  try{
+    const list=await qz.printers.find(); const def=await qz.printers.getDefault();
+    const arr=(Array.isArray(list)?list:[list]).filter(Boolean);
+    sel.innerHTML='<option value="">Défaut ('+(def||'système')+')</option>';
+    arr.forEach(p=>{
+      const o=document.createElement('option'); o.value=p; o.textContent=p; sel.appendChild(o);
+    });
+    // Restaure le dernier choix, sinon sélectionne l'Epson TM-T88V automatiquement
+    let voulu=null; try{ voulu=localStorage.getItem('gp_printer'); }catch(e){}
+    if(voulu && arr.includes(voulu)){ sel.value=voulu; }
+    else{
+      const epson=arr.find(p=>/tm-?t88|tm88|epson|receipt|reçu|ticket/i.test(p));
+      if(epson) sel.value=epson;
+    }
+  }catch(e){}
+}
+
+let occupe=false;
+async function imprimer(cle, i, boutonEl){
+  if(occupe) return;
+  occupe=true;
+  if(boutonEl) boutonEl.classList.add('occupe');
+  try{
+    // Connexion automatique si QZ Tray n'est pas encore relié
+    if(!qz.websocket.isActive()){
+      toast('Connexion à QZ Tray…');
+      await configurerSignature();
+      await qz.websocket.connect({retries:1, delay:1});
+      setStatut('connecté'+(SIGNE?' · signé':' · non signé'),'ok');
+      await detecter();
+    }
+
+    const mm=largeurMM();
+    // Mesure la hauteur réelle du reçu à la vraie largeur d'impression
+    const mesure=document.getElementById('mesure');
+    mesure.style.width=mm+'mm';
+    mesure.innerHTML='<div class="ticket" style="width:'+mm+'mm">'+
+      ticketHTML(cle, i)+'</div>';
+    const BAS_MM = 22; // espace blanc ajouté en bas pour ne pas couper la dernière ligne
+    const hMM = Math.ceil(mesure.firstChild.offsetHeight / 3.7795275591) + BAS_MM;
+    mesure.innerHTML='';
+
+    // IMPORTANT : contraindre html/body à la largeur exacte du papier, sinon
+    // QZ rend le reçu dans une page large (~800px) et il sort petit/décalé.
+    const doc = '<!DOCTYPE html><html><head><meta charset="utf-8"><style>'+
+      RECU_CSS+
+      ' *{box-sizing:border-box}'+
+      ' html,body{margin:0;padding:0;width:'+mm+'mm}'+
+      ' .ticket{width:'+mm+'mm;padding-bottom:'+BAS_MM+'mm}'+
+      '</style></head><body>'+
+      '<div class="ticket">'+ticketHTML(cle, i)+'</div></body></html>';
+
+    const printer=document.getElementById('imprimante').value || null;
+    const cfg=qz.configs.create(printer,{units:'mm', size:{width:mm, height:hMM},
+                                          margins:0, scaleContent:true, rasterize:true});
+    // options.pageWidth force QZ à rendre le HTML à la largeur du papier
+    await qz.print(cfg, [{type:'pixel', format:'html', flavor:'plain', data:doc,
+                          options:{pageWidth:mm, pageHeight:hMM, units:'mm'}}]);
+    toast('<span class="pastille">✓</span>&nbsp; Reçu imprimé');
+  }catch(e){
+    const off = String(e).toLowerCase().includes('connect') || !qz.websocket.isActive();
+    toast(off ? 'QZ Tray non démarré — ouvre l\'application QZ' : 'Erreur d\'impression', true);
+  }finally{
+    if(boutonEl) boutonEl.classList.remove('occupe');
+    occupe=false;
+  }
+}
+
+/* CSS du reçu extrait pour le document d'impression */
+const RECU_CSS = [...document.styleSheets[0].cssRules]
+  .filter(r=>r.selectorText && r.selectorText.indexOf('.ticket')===0)
+  .map(r=>r.cssText).join('\n');
+
+document.getElementById('btnConnecter').onclick=connecter;
+document.getElementById('btnRafraichir').onclick=detecter;
+
+// Mémorise les choix (imprimante + papier) pour la prochaine ouverture
+document.getElementById('imprimante').onchange=e=>{
+  try{ localStorage.setItem('gp_printer', e.target.value); }catch(_){}
+};
+document.getElementById('largeur').onchange=e=>{
+  try{ localStorage.setItem('gp_paper', e.target.value); }catch(_){}
+};
+try{ const p=localStorage.getItem('gp_paper'); if(p) document.getElementById('largeur').value=p; }catch(_){}
+
+/* Démarrage */
+construire();
+</script>
+</body>
+</html>
